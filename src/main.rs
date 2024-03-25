@@ -72,6 +72,8 @@ fn do_init() -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    env_logger::init();
+
     let args = Command::new("casd")
         .about("CAS file manager utility")
         .subcommand_required(true)
