@@ -68,6 +68,11 @@ fn do_add<P: AsRef<Path>>(config: &Config, path: P) -> Result<PathBuf> {
         std::fs::copy(&path, &target)?;
     }
 
+    std::process::Command::new("wl-copy")
+        .arg(&target)
+        .spawn()?
+        .wait()?;
+
     Ok(target)
 }
 
