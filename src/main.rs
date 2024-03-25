@@ -52,7 +52,16 @@ fn hash_contents<P: AsRef<Path>>(path: P) -> Result<String> {
 
 fn do_add<P: AsRef<Path>>(config: &Config, path: P) -> Result<PathBuf> {
     let hash = hash_contents(&path)?;
-    let target = config.basedir.join(hash);
+
+    let extension = path
+        .as_ref()
+        .extension()
+        .map(|ext| ext.to_str().unwrap())
+        .unwrap_or("");
+
+    let mut target = config.basedir.join(hash);
+    target.set_extension(extension);
+
     if target.is_file() {
         log::info!("File {:?} already exists, skipping", target);
     } else {
