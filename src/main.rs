@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::path::{Path, PathBuf};
 
-const CASD_DIR: &str = ".casd";
+const APP_DIR: &str = ".things-stored";
 
 struct Config {
     basedir: PathBuf,
@@ -14,13 +14,13 @@ struct Config {
 impl Config {
     fn get() -> Result<Self> {
         for dir in std::env::current_dir()?.ancestors() {
-            let cdir = dir.join(CASD_DIR);
+            let cdir = dir.join(APP_DIR);
             if cdir.is_dir() {
                 return Ok(Self { basedir: cdir });
             }
         }
         Err(anyhow!(
-            "Not in a CASD-managed directory. Perhaps you should run `casd init`?"
+            "Not in a store-things managed directory. Perhaps you should run `store-things init`?"
         ))
     }
 }
@@ -28,7 +28,7 @@ impl Config {
 fn hash_contents<P: AsRef<Path>>(path: P) -> Result<String> {
     fn inner(path: &Path) -> Result<String> {
         if !path.exists() {
-            bail!("The path `{:?}` does not exist file", path);
+            bail!("The path `{:?}` does not exist", path);
         }
         if !path.is_file() {
             bail!("The path `{:?}` is not a file", path);
@@ -78,7 +78,7 @@ fn do_add<P: AsRef<Path>>(config: &Config, path: P) -> Result<PathBuf> {
 
 fn do_init() -> Result<()> {
     let cwd = std::env::current_dir()?;
-    let cdir = cwd.join(CASD_DIR);
+    let cdir = cwd.join(APP_DIR);
     if !cdir.is_dir() {
         std::fs::create_dir(cdir)?;
     }
@@ -88,10 +88,12 @@ fn do_init() -> Result<()> {
 fn main() -> Result<()> {
     env_logger::init();
 
-    let args = Command::new("casd")
-        .about("CAS file manager utility")
+    let args = Command::new("store-things")
+        .about("store things with unique names")
         .subcommand_required(true)
-        .subcommand(Command::new("init").about("initializes casd in the current working directory"))
+        .subcommand(
+            Command::new("init").about("initializes store-things in the current working directory"),
+        )
         .subcommand(
             Command::new("add")
                 .about("add a new entry to the cas")

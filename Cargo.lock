@@ -75,17 +75,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "casd"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "env_logger",
- "log",
- "sha2",
-]
-
-[[package]]
 name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -248,6 +237,17 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
+]
+
+[[package]]
+name = "store-things"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "env_logger",
+ "log",
+ "sha2",
 ]
 
 [[package]]

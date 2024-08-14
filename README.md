@@ -1,4 +1,4 @@
-# Content Addressable Store Directory
+# `store-things`
 
 This tool has one simple purpose: it takes files and organizes them in a directory with names
 computed from their content (i.e. this is a Content Addressable Store).
