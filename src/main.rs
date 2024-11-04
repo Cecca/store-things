@@ -1,28 +1,59 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Context, Result};
 use clap::{Arg, Command};
 use sha2::Digest;
 use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
-const APP_DIR: &str = ".things-stored";
-
+#[derive(serde::Deserialize)]
 struct Config {
-    basedir: PathBuf,
+    clippings: PathBuf,
+    strip_dir: Option<PathBuf>,
 }
 
 impl Config {
     fn get() -> Result<Self> {
-        for dir in std::env::current_dir()?.ancestors() {
-            let cdir = dir.join(APP_DIR);
-            if cdir.is_dir() {
-                return Ok(Self { basedir: cdir });
-            }
+        let home = std::env::home_dir().unwrap();
+        let cdir = home.join(".config").join("store-things");
+        if cdir.is_dir() {
+            let conf_path = cdir.join("config.toml");
+            let mut f = File::open(conf_path)?;
+            let mut conf_str = String::new();
+            f.read_to_string(&mut conf_str)?;
+            let conf: Self = toml::from_str(&conf_str)?;
+            return Ok(conf);
+        } else {
+            bail!("no configuration found")
         }
-        Err(anyhow!(
-            "Not in a store-things managed directory. Perhaps you should run `store-things init`?"
-        ))
     }
+
+    fn get_clippings_dir(&self) -> Result<PathBuf> {
+        expand_user(&self.clippings)
+    }
+
+    fn strip_prefix(&self, path: &PathBuf) -> Result<PathBuf> {
+        if let Some(prefix) = self.strip_dir.as_ref() {
+            let prefix = expand_user(prefix)?;
+            if path.starts_with(&prefix) {
+                let plen = prefix.to_str().context("prefix to string")?.len();
+                let path = path.to_str().context("path to string")?;
+                let path = PathBuf::from_str(&path[plen..])?;
+                Ok(path)
+            } else {
+                Ok(path.clone())
+            }
+        } else {
+            Ok(path.clone())
+        }
+    }
+}
+
+fn expand_user(path: &PathBuf) -> Result<PathBuf> {
+    let home = std::env::home_dir().context("getting home dir")?;
+    let path = path.to_str().context("conversion to string")?;
+    let path = path.replace("~", home.to_str().context("conversion to string")?);
+    PathBuf::from_str(&path).context("creation of pathbuf")
 }
 
 fn hash_contents<P: AsRef<Path>>(path: P) -> Result<String> {
@@ -59,7 +90,11 @@ fn do_add<P: AsRef<Path>>(config: &Config, path: P) -> Result<PathBuf> {
         .map(|ext| ext.to_str().unwrap())
         .unwrap_or("");
 
-    let mut target = config.basedir.join(hash);
+    let clippings_dir = config.get_clippings_dir()?;
+    if !clippings_dir.is_dir() {
+        std::fs::create_dir(&clippings_dir).context("creating clippings directory")?;
+    }
+    let mut target = clippings_dir.join(hash);
     target.set_extension(extension);
 
     if target.is_file() {
@@ -69,49 +104,24 @@ fn do_add<P: AsRef<Path>>(config: &Config, path: P) -> Result<PathBuf> {
     }
 
     std::process::Command::new("wl-copy")
-        .arg(&target)
+        .arg(&config.strip_prefix(&target)?)
         .spawn()?
         .wait()?;
 
     Ok(target)
 }
 
-fn do_init() -> Result<()> {
-    let cwd = std::env::current_dir()?;
-    let cdir = cwd.join(APP_DIR);
-    if !cdir.is_dir() {
-        std::fs::create_dir(cdir)?;
-    }
-    Ok(())
-}
-
 fn main() -> Result<()> {
     env_logger::init();
 
-    let args = Command::new("store-things")
+    let args = Command::new("store")
         .about("store things with unique names")
-        .subcommand_required(true)
-        .subcommand(
-            Command::new("init").about("initializes store-things in the current working directory"),
-        )
-        .subcommand(
-            Command::new("add")
-                .about("add a new entry to the cas")
-                .arg(Arg::new("path").required(true)),
-        )
+        .arg(Arg::new("path").required(true))
         .get_matches();
 
-    match args.subcommand() {
-        Some(("init", _)) => {
-            do_init()?;
-        }
-        Some(("add", matches)) => {
-            let config = Config::get()?;
-            let path: &String = matches.get_one("path").unwrap();
-            do_add(&config, path)?;
-        }
-        _ => unreachable!(),
-    }
+    let config = Config::get()?;
+    let path: &String = args.get_one("path").unwrap();
+    do_add(&config, path)?;
 
     Ok(())
 }
