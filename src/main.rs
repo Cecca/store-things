@@ -10,6 +10,7 @@ use std::str::FromStr;
 struct Config {
     clippings: PathBuf,
     strip_dir: Option<PathBuf>,
+    screenshot_dir: PathBuf,
 }
 
 impl Config {
@@ -32,6 +33,10 @@ impl Config {
         expand_user(&self.clippings)
     }
 
+    fn get_screenshot_dir(&self) -> Result<PathBuf> {
+        expand_user(&self.screenshot_dir)
+    }
+
     fn strip_prefix(&self, path: &PathBuf) -> Result<PathBuf> {
         if let Some(prefix) = self.strip_dir.as_ref() {
             let prefix = expand_user(prefix)?;
@@ -47,6 +52,19 @@ impl Config {
             Ok(path.clone())
         }
     }
+}
+
+fn most_recent_file(dir: &PathBuf) -> Result<PathBuf> {
+    let dir = expand_user(dir)?;
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(&dir).context("listing directory")? {
+        let path = entry?.path();
+        if path.is_file() {
+            files.push(path);
+        }
+    }
+    files.sort_by_key(|path| path.metadata().unwrap().modified().unwrap());
+    files.last().cloned().context("getting last file")
 }
 
 fn expand_user(path: &PathBuf) -> Result<PathBuf> {
@@ -116,11 +134,26 @@ fn main() -> Result<()> {
 
     let args = Command::new("store")
         .about("store things with unique names")
-        .arg(Arg::new("path").required(true))
+        .arg(
+            Arg::new("last-screenshot")
+                .long("last-screenshot")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(Arg::new("path").required(false))
         .get_matches();
 
     let config = Config::get()?;
-    let path: &String = args.get_one("path").unwrap();
+    let path: String = if args.get_flag("last-screenshot") {
+        let screen_dir = config.get_screenshot_dir()?;
+        most_recent_file(&screen_dir)?
+            .to_str()
+            .context("converting to string")?
+            .to_owned()
+    } else {
+        args.get_one::<String>("path")
+            .context("you should provide a path to store")?
+            .clone()
+    };
     do_add(&config, path)?;
 
     Ok(())
